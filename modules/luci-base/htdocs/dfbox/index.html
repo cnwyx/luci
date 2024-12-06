@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFBox</title>
+    <style>
+        body { 
+            height: 100vh; 
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: #f8f9fa;
+        }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #0d6efd;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+        }
+
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <script src="fun.js"></script>
+    <script src="jquery.min.js"></script>
+    <script>
+        async function checkLoginStatus() {
+            try {
+                // 1. 首先检查是否有会话token
+                let session = localStorage.getItem('ubus_session');
+                log('当前会话token:', session);
+
+                // 2. 验证会话是否有效
+                const sessionResp = await call('session', 'access');
+                log('会话验证结果:', sessionResp);
+
+                let hasValidSession = false;
+                if (sessionResp.result?.[1]?.uci) {
+                    hasValidSession = true;
+                    log('会话有效');
+                } else {
+                    log('会话无效，尝试授权');
+                    // 3. 会话无效时尝试授权
+                    localStorage.removeItem('ubus_session');
+                    const loginResp = await call('session', 'login', { username: 'dfbox', password: 'admin', timeout: 3600 });
+                    log('授权结果:', loginResp);
+                    
+                    if (loginResp.result?.[1]?.ubus_rpc_session) {
+                        localStorage.setItem('ubus_session', loginResp.result[1].ubus_rpc_session);
+                        hasValidSession = true;
+                        log('授权成功');
+                    } else {
+                        err('授权失败');
+                        return;
+                    }
+                }
+
+                // 4. 检查是否已初始化密码
+                if (hasValidSession) {
+                    const pwdResp = await call('uci', 'get', { config: 'system',  type: 'dfbox'});
+                    log('密码检查结果:', pwdResp);
+                    const password = pwdResp.result?.[1]?.values?.cfg0430d8?.admin;
+                    if (password=='admin') {
+                        log('未设置密码，跳转到设置');
+                        location.href = 'main.html';
+                        return;
+                    }
+
+                    // 5. 最终验证登录权限
+                    const dfboxSession = localStorage.getItem('dfbox_session');
+                    if (!dfboxSession || dfboxSession !== password) {
+                        log('无访问权限，跳转到登录页');
+                        location.href = 'login.html';
+                        return;
+                    }
+
+                    // 6. 所有检查通过，跳转到主页
+                    log('所有检查通过，跳转到设置');
+                    location.href = 'main.html';
+                }
+
+            } catch (error) {
+                err('发生错误:', error);
+                alert('初始化失败，请登录后重试，或联系运维人员。');
+                location.href = 'login.html';
+            }
+        }
+
+        checkLoginStatus();
+    </script>
+</body>
+</html>

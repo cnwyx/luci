@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFBox</title>
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { height: 100vh; display: grid; place-items: center; background: #f8f9fa; }
+        .login-container { width: min(400px, 90%); }
+        .card { border: none; border-radius: 10px; box-shadow: 0 0 20px #0001; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="card">
+            <div class="card-header bg-white border-0 text-center pt-4">
+                <h3>DFBox 登录</h3>
+                <p class="text-muted">请输入密码</p>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-floating">
+                        <input type="password" class="form-control" id="password" placeholder="密码">
+                        <label for="password">密码</label>
+                    </div>
+                </div>
+                <div class="alert alert-danger d-none" id="loginError"></div>
+                <button class="btn btn-primary w-100" id="loginBtn">登录</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="fun.js"></script>
+    <script src="jquery.min.js"></script>
+    <script>
+        $(() => {
+            const $error = $('#loginError');
+            const $password = $('#password');
+            const $loginBtn = $('#loginBtn');
+
+            function showError(message) {
+                $error.text(message).removeClass('d-none');
+            }
+
+            $loginBtn.on('click', () => {
+                $error.addClass('d-none');
+                const password = $password.val();
+
+                // 验证密码长度
+                if (!password || password.length < 8) {
+                    showError('密码长度必须大于8位');
+                    return;
+                }
+
+                $loginBtn.prop('disabled', true);
+
+                // 保存密码到localStorage
+                localStorage.setItem('dfbox_session', password);
+                
+                // 跳转到首页
+                location.href = 'index.html';
+            });
+
+            // 支持回车登录
+            $password.on('keypress', (e) => {
+                if (e.which === 13) {
+                    $loginBtn.click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

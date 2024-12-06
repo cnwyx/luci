@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFBox</title>
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { height: 100vh; display: grid; place-items: center; background: #f8f9fa; }
+        .main-container { width: min(600px, 90%); }
+        .card { border: none; border-radius: 10px; box-shadow: 0 0 20px #0001; }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid #0d6efd;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+            margin: 2rem auto;
+            display: none;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="card">
+            <div class="card-header bg-white border-0 text-center pt-4">
+                <h3>DFBox 设置</h3>
+                <p class="text-muted">配置网络和WiFi设置</p>
+            </div>
+            <div class="card-body">
+                <div class="loader" id="loader"></div>
+                <div id="mainContent">
+                    <!-- 网络设置部分 -->
+                    <div class="mb-4">
+                        <h5 class="mb-3">网络设置</h5>
+                        <div class="mb-3">
+                            <select class="form-select" id="networkType">
+                                <option value="dhcp">自动获取IP（DHCP）</option>
+                                <option value="pppoe">宽带拨号（PPPOE）</option>
+                            </select>
+                        </div>
+                        <div id="pppoeSettings" class="d-none">
+                            <div class="mb-3">
+                                <input type="text" class="form-control" id="pppoeUsername" placeholder="宽带账号">
+                            </div>
+                            <div class="mb-3">
+                                <input type="password" class="form-control" id="pppoePassword" placeholder="宽带密码">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- WiFi设置部分 -->
+                    <div class="mb-4">
+                        <h5 class="mb-3">WiFi设置</h5>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" id="wifiSsid" placeholder="WiFi名称">
+                        </div>
+                        <div class="mb-3">
+                            <input type="password" class="form-control" id="wifiPassword" placeholder="WiFi密码">
+                        </div>
+                    </div>
+
+                    <div class="alert alert-danger d-none" id="errorMsg"></div>
+                    <button class="btn btn-primary w-100" id="saveBtn">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="fun.js"></script>
+    <script src="jquery.min.js"></script>
+    <script>
+        $(() => {
+            const $networkType = $('#networkType');
+            const $pppoeSettings = $('#pppoeSettings');
+            const $errorMsg = $('#errorMsg');
+            const $saveBtn = $('#saveBtn');
+            const $loader = $('#loader');
+            const $mainContent = $('#mainContent');
+
+            // 显示加载动画
+            function showLoading() {
+                $loader.show();
+                $mainContent.hide();
+            }
+
+            // 隐藏加载动画
+            function hideLoading() {
+                $loader.hide();
+                $mainContent.show();
+            }
+
+            // 获取当前配置
+            async function getCurrentConfig() {
+                try {
+                    showLoading();
+
+                    // 调用API获取当前配置
+                    const config = await call('system', 'dfbox.config', {});
+                    log('当前配置:', config);
+
+                    // 填充网络设置
+                    if (config.result?.[1]?.network) {
+                        const network = config.result[1].network;
+                        $networkType.val(network.type || 'dhcp');
+                        
+                        if (network.type === 'pppoe') {
+                            $('#pppoeUsername').val(network.username || '');
+                            $('#pppoePassword').val(network.password || '');
+                            $pppoeSettings.removeClass('d-none');
+                        }
+                    }
+
+                    // 填充WiFi设置
+                    if (config.result?.[1]?.wifi) {
+                        const wifi = config.result[1].wifi;
+                        $('#wifiSsid').val(wifi.ssid || '');
+                        $('#wifiPassword').val(wifi.password || '');
+                    }
+
+                } catch (error) {
+                    $errorMsg.text('获取配置失败：' + (error.message || '未知错误')).removeClass('d-none');
+                } finally {
+                    hideLoading();
+                }
+            }
+
+            // 网络类型切换处理
+            $networkType.on('change', () => {
+                if ($networkType.val() === 'pppoe') {
+                    $pppoeSettings.removeClass('d-none');
+                } else {
+                    $pppoeSettings.addClass('d-none');
+                }
+            });
+
+            // 保存设置
+            $saveBtn.on('click', async () => {
+                try {
+                    $errorMsg.addClass('d-none');
+                    $saveBtn.prop('disabled', true);
+                    showLoading();
+
+                    const networkType = $networkType.val();
+                    const wifiSsid = $('#wifiSsid').val();
+                    const wifiPassword = $('#wifiPassword').val();
+
+                    // 验证WiFi设置
+                    if (!wifiSsid || !wifiPassword || wifiPassword.length < 8) {
+                        throw new Error('请设置WiFi密码（至少8位）');
+                    }
+
+                    // 验证PPPoE设置
+                    if (networkType === 'pppoe') {
+                        const username = $('#pppoeUsername').val();
+                        const password = $('#pppoePassword').val();
+                        if (!username || !password) {
+                            throw new Error('请输入宽带账号和密码');
+                        }
+                    }
+
+                    // 保存网络设置
+                    const networkSettings = {
+                        type: networkType,
+                        ...(networkType === 'pppoe' ? {
+                            username: $('#pppoeUsername').val(),
+                            password: $('#pppoePassword').val()
+                        } : {})
+                    };
+
+                    // 保存WiFi设置
+                    const wifiSettings = {
+                        ssid: wifiSsid,
+                        password: wifiPassword
+                    };
+
+                    // 调用后端API保存设置
+                    await call('system', 'dfbox.setup', {
+                        network: networkSettings,
+                        wifi: wifiSettings
+                    });
+
+                    $errorMsg.removeClass('alert-danger').addClass('alert-success')
+                        .text('设置已保存').removeClass('d-none');
+
+                } catch (error) {
+                    $errorMsg.removeClass('alert-success').addClass('alert-danger')
+                        .text(error.message || '保存设置失败，请重试').removeClass('d-none');
+                } finally {
+                    $saveBtn.prop('disabled', false);
+                    hideLoading();
+                }
+            });
+
+            // 页面加载时获取当前配置
+            getCurrentConfig();
+        });
+    </script>
+</body>
+</html>
